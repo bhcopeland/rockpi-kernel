@@ -1,0 +1,77 @@
+From 42671f6045aa06afd6ca1521aa643608e8462705 Mon Sep 17 00:00:00 2001
+From: Ben Copeland <ben.copeland@linaro.org>
+Date: Thu, 12 Nov 2026 00:31:50 +0000
+Subject: [PATCH 4/4] clk: rockchip: pll: don't recurse when restoring the old
+ rate fails
+
+When a Rockchip PLL does not lock after being reprogrammed, its
+set_params callback restores the previous settings by calling itself.
+If the restore does not lock either, it calls itself again, without
+bound, until the kernel stack overflows.
+
+This was hit on an RK3399 board when a VPLL setting failed to lock
+while being applied from assigned-clock-rates during probe:
+
+  rockchip_rk3399_pll_set_params+0x1c4/0x1d0
+  rockchip_rk3399_pll_set_rate+0x64/0x110
+  clk_change_rate+0xdc/0x518
+  clk_core_set_rate_nolock+0x2e0/0x3a8
+  clk_set_rate+0x40/0x140
+  of_clk_set_defaults+0x3c8/0x720
+  platform_probe+0x40/0xc0
+  ...
+  Kernel panic - not syncing: kernel stack overflow
+
+The restore path passes the settings read back from the hardware with
+the rate field cleared, so use that to try the restore only once and
+return the error if it fails too. Apply the same to the RK3036,
+RK3066, RK3399 and RK3588 PLL types, which share the pattern.
+
+Signed-off-by: Ben Copeland <ben.copeland@linaro.org>
+---
+ drivers/clk/rockchip/clk-pll.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/clk/rockchip/clk-pll.c b/drivers/clk/rockchip/clk-pll.c
+index 706ca4b344d3..35a93a4886e3 100644
+--- a/drivers/clk/rockchip/clk-pll.c
++++ b/drivers/clk/rockchip/clk-pll.c
+@@ -241,7 +241,7 @@ static int rockchip_rk3036_pll_set_params(struct rockchip_clk_pll *pll,
+ 
+ 	/* wait for the pll to lock */
+ 	ret = rockchip_rk3036_pll_wait_lock(pll);
+-	if (ret) {
++	if (ret && rate->rate) {
+ 		pr_warn("%s: pll update unsuccessful, trying to restore old params\n",
+ 			__func__);
+ 		rockchip_rk3036_pll_set_params(pll, &cur);
+@@ -476,7 +476,7 @@ static int rockchip_rk3066_pll_set_params(struct rockchip_clk_pll *pll,
+ 
+ 	/* wait for the pll to lock */
+ 	ret = rockchip_pll_wait_lock(pll);
+-	if (ret) {
++	if (ret && rate->rate) {
+ 		pr_warn("%s: pll update unsuccessful, trying to restore old params\n",
+ 			__func__);
+ 		rockchip_rk3066_pll_set_params(pll, &cur);
+@@ -725,7 +725,7 @@ static int rockchip_rk3399_pll_set_params(struct rockchip_clk_pll *pll,
+ 
+ 	/* wait for the pll to lock */
+ 	ret = rockchip_rk3399_pll_wait_lock(pll);
+-	if (ret) {
++	if (ret && rate->rate) {
+ 		pr_warn("%s: pll update unsuccessful, trying to restore old params\n",
+ 			__func__);
+ 		rockchip_rk3399_pll_set_params(pll, &cur);
+@@ -981,7 +981,7 @@ static int rockchip_rk3588_pll_set_params(struct rockchip_clk_pll *pll,
+ 
+ 	/* wait for the pll to lock */
+ 	ret = rockchip_rk3588_pll_wait_lock(pll);
+-	if (ret) {
++	if (ret && rate->rate) {
+ 		pr_warn("%s: pll update unsuccessful, trying to restore old params\n",
+ 			__func__);
+ 		rockchip_rk3588_pll_set_params(pll, &cur);
+-- 
+2.56.1
+

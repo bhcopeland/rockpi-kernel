@@ -1,0 +1,48 @@
+From a88817f07f2f42ddcab54eb063397caf9700c10b Mon Sep 17 00:00:00 2001
+From: Ben Copeland <ben.copeland@linaro.org>
+Date: Thu, 12 Nov 2026 00:02:21 +0000
+Subject: [PATCH 2/4] arm64: dts: rockchip: rock-pi-4: clock HDMI from VPLL via
+ VOPB only
+
+VOPB drives HDMI, but DCLK_VOP0_DIV defaults to GPLL, so the pixel
+clock is GPLL divided down (594 MHz / 9 = 66.0 MHz for a 66.28 MHz
+mode) while dw_hdmi-rockchip sets VPLL to the exact mode clock. VOPL
+also hangs off VPLL and holds it at its own rate. Make VPLL the parent
+of DCLK_VOP0_DIV and disable the unused VOPL so the pixel clock
+follows VPLL alone.
+
+Signed-off-by: Ben Copeland <ben.copeland@linaro.org>
+---
+ arch/arm64/boot/dts/rockchip/rk3399-rock-pi-4.dtsi | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3399-rock-pi-4.dtsi b/arch/arm64/boot/dts/rockchip/rk3399-rock-pi-4.dtsi
+index a8ab043e4062..646dde118c84 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3399-rock-pi-4.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3399-rock-pi-4.dtsi
+@@ -784,6 +784,10 @@ &usbdrd_dwc3_1 {
+ };
+ 
+ &vopb {
++	assigned-clocks = <&cru ACLK_VOP0>, <&cru HCLK_VOP0>,
++			  <&cru DCLK_VOP0_DIV>;
++	assigned-clock-rates = <400000000>, <100000000>, <0>;
++	assigned-clock-parents = <0>, <0>, <&cru PLL_VPLL>;
+ 	status = "okay";
+ };
+ 
+@@ -792,9 +796,9 @@ &vopb_mmu {
+ };
+ 
+ &vopl {
+-	status = "okay";
++	status = "disabled";
+ };
+ 
+ &vopl_mmu {
+-	status = "okay";
++	status = "disabled";
+ };
+-- 
+2.56.1
+

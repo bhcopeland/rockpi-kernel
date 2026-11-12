@@ -1,0 +1,36 @@
+From fe12864cc24e28d20f1d14e1ebac655b3a4be9fa Mon Sep 17 00:00:00 2001
+From: Ben Copeland <ben.copeland@linaro.org>
+Date: Thu, 12 Nov 2026 00:17:03 +0000
+Subject: [PATCH 3/4] clk: rockchip: rk3399: let VOPB's dclk set its parent's
+ rate
+
+vop_crtc_mode_fixup() rounds the mode clock with clk_round_rate() on
+the VOP dclk before anything programs VPLL. DCLK_VOP0_DIV has no
+CLK_SET_RATE_PARENT, so rounding only sees its parents' current rates
+and a 66.28 MHz mode is clamped (to 65 MHz from VPLL or 66.0 MHz from
+GPLL) even though VPLL can produce it exactly. Let DCLK_VOP0_DIV pass
+rate requests to its parent, and keep it on the parent assigned in the
+device tree so it never retunes the shared CPLL or GPLL.
+
+Signed-off-by: Ben Copeland <ben.copeland@linaro.org>
+---
+ drivers/clk/rockchip/clk-rk3399.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/clk/rockchip/clk-rk3399.c b/drivers/clk/rockchip/clk-rk3399.c
+index cc08baa4e911..b8f1a225bea8 100644
+--- a/drivers/clk/rockchip/clk-rk3399.c
++++ b/drivers/clk/rockchip/clk-rk3399.c
+@@ -1163,7 +1163,8 @@ static struct rockchip_clk_branch rk3399_clk_branches[] __initdata = {
+ 	GATE(HCLK_VOP0_NOC, "hclk_vop0_noc", "hclk_vop0_pre", CLK_IGNORE_UNUSED,
+ 			RK3399_CLKGATE_CON(28), 0, GFLAGS),
+ 
+-	COMPOSITE(DCLK_VOP0_DIV, "dclk_vop0_div", mux_pll_src_vpll_cpll_gpll_p, 0,
++	COMPOSITE(DCLK_VOP0_DIV, "dclk_vop0_div", mux_pll_src_vpll_cpll_gpll_p,
++			CLK_SET_RATE_PARENT | CLK_SET_RATE_NO_REPARENT,
+ 			RK3399_CLKSEL_CON(49), 8, 2, MFLAGS, 0, 8, DFLAGS,
+ 			RK3399_CLKGATE_CON(10), 12, GFLAGS),
+ 
+-- 
+2.56.1
+
